@@ -20,8 +20,19 @@ import {
   Calendar,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   User,
   MessageSquare,
+  Utensils,
+  Umbrella,
+  Hotel,
+  Wine,
+  Coffee,
+  Wrench,
+  Theater,
+  ShoppingBag,
+  ChevronUp,
+  Bot,
 } from "lucide-react";
 import {
   Card,
@@ -70,6 +81,14 @@ import { Avatar } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Photo = {
   reference: string;
@@ -103,6 +122,8 @@ type Place = {
   description: string;
   userRatingsTotal?: number;
   reviews?: Review[];
+  aiDescription?: string;
+  aiRecommendations?: string;
 };
 
 type LocationSuggestion = {
@@ -111,6 +132,14 @@ type LocationSuggestion = {
   mainText: string;
   secondaryText: string;
 };
+
+interface CategoryItem {
+  id: string;
+  name: string;
+  icon: React.ReactNode;
+  count: number;
+  color: string;
+}
 
 export default function TravelGuide() {
   const { toast } = useToast();
@@ -141,13 +170,213 @@ export default function TravelGuide() {
     minRating: 0,
     openNow: false,
   });
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [trendingScrollIndex, setTrendingScrollIndex] = useState(0);
+  const [placesScrollIndex, setPlacesScrollIndex] = useState(0);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({
+    restaurant: 0,
+    beach: 0,
+    hotel: 0,
+    bar: 0,
+    cafe: 0,
+    services: 0,
+    entertainment: 0,
+    shopping: 0,
+  });
+  const [aiSuggestionsOpen, setAiSuggestionsOpen] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
+  const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
+
+  // Construct popular categories with dynamic counts
+  const popularCategories: CategoryItem[] = [
+    {
+      id: "restaurant",
+      name: "Restaurantes",
+      icon: <Utensils className="h-10 w-10" />,
+      count: categoryCounts.restaurant,
+      color: "bg-red-50 text-red-500",
+    },
+    {
+      id: "beach",
+      name: "Playas",
+      icon: <Umbrella className="h-10 w-10" />,
+      count: categoryCounts.beach,
+      color: "bg-blue-50 text-blue-500",
+    },
+    {
+      id: "hotel",
+      name: "Hoteles",
+      icon: <Hotel className="h-10 w-10" />,
+      count: categoryCounts.hotel,
+      color: "bg-slate-50 text-slate-500",
+    },
+    {
+      id: "bar",
+      name: "Bares",
+      icon: <Wine className="h-10 w-10" />,
+      count: categoryCounts.bar,
+      color: "bg-purple-50 text-purple-500",
+    },
+    {
+      id: "cafe",
+      name: "Cafeterías",
+      icon: <Coffee className="h-10 w-10" />,
+      count: categoryCounts.cafe,
+      color: "bg-amber-50 text-amber-500",
+    },
+    {
+      id: "services",
+      name: "Servicios",
+      icon: <Wrench className="h-10 w-10" />,
+      count: categoryCounts.services,
+      color: "bg-emerald-50 text-emerald-500",
+    },
+    {
+      id: "entertainment",
+      name: "Entretenimiento",
+      icon: <Theater className="h-10 w-10" />,
+      count: categoryCounts.entertainment,
+      color: "bg-pink-50 text-pink-500",
+    },
+    {
+      id: "shopping",
+      name: "Compras",
+      icon: <ShoppingBag className="h-10 w-10" />,
+      count: categoryCounts.shopping,
+      color: "bg-green-50 text-green-500",
+    },
+  ];
+
+  const handleCategoryClick = async (categoryId: string) => {
+    console.log("Category clicked:", categoryId);
+
+    if (!coordinates) {
+      console.log("No coordinates available - requesting geolocation");
+
+      // Try to request geolocation
+      if (navigator.geolocation) {
+        toast({
+          title: "Detectando ubicación",
+          description:
+            "Necesitamos tu ubicación para mostrarte lugares cercanos...",
+        });
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const coords = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+            setCoordinates(coords);
+            // After setting coordinates, try the category click again
+            setTimeout(() => {
+              handleCategoryClick(categoryId);
+            }, 500);
+          },
+          (error) => {
+            console.error("Geolocation error:", error);
+            toast({
+              title: "Ubicación requerida",
+              description: "Por favor, ingresa una ubicación primero",
+              variant: "destructive",
+            });
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      } else {
+        toast({
+          title: "Ubicación requerida",
+          description: "Por favor, ingresa una ubicación primero",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Visual feedback that something is happening
+    toast({
+      title: "Cargando categoría",
+      description: `Buscando lugares en ${categoryId}...`,
+    });
+
+    setCategory(categoryId);
+    setLoading(true); // Use the main loading state for more visibility
+
+    try {
+      console.log("Fetching with coordinates:", coordinates);
+      const locationString = `${coordinates.lat},${coordinates.lng}`;
+      console.log("API call with:", locationString, categoryId);
+
+      const response = await fetch(
+        `/api/places/trending?location=${locationString}&type=${categoryId}`
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to fetch trending places");
+      }
+
+      const data = await response.json();
+      console.log("Results received:", data.results.length);
+
+      // Update both places and trending places with the results
+      setPlaces(data.results);
+      setTrendingPlaces(data.results);
+
+      // Force a small delay to ensure DOM is updated before scrolling
+      setTimeout(() => {
+        const resultsSection = document.querySelector(
+          ".travel-results-section"
+        );
+        if (resultsSection) {
+          resultsSection.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 300);
+    } catch (error: any) {
+      console.error("Error fetching category places:", error);
+      toast({
+        title: "Error",
+        description:
+          error.message ||
+          "No se pudieron cargar los lugares para esta categoría",
+        variant: "destructive",
+      });
+    } finally {
+      setTrendingLoading(false);
+      setLoading(false);
+    }
+  };
 
   // Fetch trending places when coordinates change
   useEffect(() => {
     if (coordinates) {
+      console.log("Coordinates effect triggered:", coordinates);
       fetchTrendingPlaces();
     }
-  }, [coordinates, category]);
+  }, [coordinates?.lat, coordinates?.lng]); // Use more specific dependencies
+
+  // Effect to handle category change separately
+  useEffect(() => {
+    if (coordinates && category) {
+      console.log("Category effect triggered:", category);
+      fetchTrendingPlaces();
+    }
+  }, [category]);
+
+  // Display a location prompt if no coordinates are set
+  useEffect(() => {
+    if (!coordinates && !locationInputValue && !loading) {
+      // Show the toast only once when component mounts
+      const timer = setTimeout(() => {
+        toast({
+          title: "Ingresa una ubicación",
+          description: "Selecciona una ubicación para ver lugares cercanos",
+        });
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Handle location input changes and fetch suggestions
   const handleLocationInputChange = (value: string) => {
@@ -222,6 +451,7 @@ export default function TravelGuide() {
     const textToGeocode = locationText || location;
     if (!textToGeocode.trim()) return null;
 
+    console.log("Geocoding location:", textToGeocode);
     try {
       setLoading(true);
       const response = await fetch(
@@ -229,9 +459,11 @@ export default function TravelGuide() {
       );
 
       const data = await response.json();
+      console.log("Geocode response:", data);
 
       // Handle 404 Not Found (location not found case)
       if (response.status === 404) {
+        console.log("Location not found");
         toast({
           title: "Location Not Found",
           description:
@@ -251,9 +483,11 @@ export default function TravelGuide() {
         lng: data.location.lng,
       };
 
+      console.log("Setting coordinates:", coords);
       setCoordinates(coords);
       return `${coords.lat},${coords.lng}`;
     } catch (error: any) {
+      console.error("Geocoding error:", error);
       toast({
         title: "Geocoding Error",
         description:
@@ -267,11 +501,18 @@ export default function TravelGuide() {
   };
 
   const fetchTrendingPlaces = async () => {
-    if (!coordinates) return;
+    if (!coordinates) {
+      console.log("No coordinates available for fetchTrendingPlaces");
+      return;
+    }
 
+    console.log("fetchTrendingPlaces called with category:", category);
     setTrendingLoading(true);
+
     try {
       const locationString = `${coordinates.lat},${coordinates.lng}`;
+      console.log("Trending API call with:", locationString, category);
+
       const response = await fetch(
         `/api/places/trending?location=${locationString}&type=${category}`
       );
@@ -282,7 +523,16 @@ export default function TravelGuide() {
       }
 
       const data = await response.json();
+      console.log("Trending results received:", data.results.length);
       setTrendingPlaces(data.results);
+
+      // Update the category count when we get trending results
+      if (data.totalFound !== undefined && data.category) {
+        setCategoryCounts((prev) => ({
+          ...prev,
+          [data.category]: data.totalFound,
+        }));
+      }
     } catch (error: any) {
       console.error("Error fetching trending places:", error);
       toast({
@@ -352,7 +602,9 @@ export default function TravelGuide() {
     setPlaceDetailsLoading(true);
 
     try {
-      const response = await fetch(`/api/places/details?place_id=${placeId}`);
+      const response = await fetch(
+        `/api/places/details?place_id=${placeId}&useAI=true`
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -467,8 +719,354 @@ export default function TravelGuide() {
     return stars;
   };
 
+  // Add geolocation detection when component mounts
+  useEffect(() => {
+    // Check if geolocation is supported by the browser
+    if (navigator.geolocation && !coordinates) {
+      toast({
+        title: "Detectando ubicación",
+        description: "Obteniendo tu ubicación actual...",
+      });
+
+      navigator.geolocation.getCurrentPosition(
+        // Success callback
+        (position) => {
+          const coords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+          console.log("Geolocation detected:", coords);
+          setCoordinates(coords);
+
+          // Get city name from coordinates using reverse geocoding
+          fetch(`/api/geocode/reverse?lat=${coords.lat}&lng=${coords.lng}`)
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.address) {
+                setLocationInputValue(data.address);
+                setLocation(data.address);
+                toast({
+                  title: "Ubicación detectada",
+                  description: `Tu ubicación: ${data.address}`,
+                });
+              }
+            })
+            .catch((error) => {
+              console.error("Error getting address:", error);
+              // Still set coordinates even if we can't get the address
+              toast({
+                title: "Ubicación detectada",
+                description: "Tu ubicación ha sido detectada",
+              });
+            });
+        },
+        // Error callback
+        (error) => {
+          console.error("Geolocation error:", error);
+          toast({
+            title: "Error de ubicación",
+            description:
+              "No se pudo detectar tu ubicación. Por favor ingrésala manualmente.",
+            variant: "destructive",
+          });
+        },
+        // Options
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    }
+  }, []);
+
+  // Add scroll event listener to show/hide back to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      // Show button when scrolled down 300px
+      setShowBackToTop(window.scrollY > 300);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Function to scroll back to top
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Add floating back to top and category selection UI
+  const FloatingControls = () => {
+    if (!showBackToTop) return null;
+
+    return (
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+        <Popover>
+          <PopoverTrigger asChild>
+            <div className="bg-white dark:bg-gray-800 rounded-full shadow-lg p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              <Filter className="h-6 w-6 text-primary" />
+            </div>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-3" align="end">
+            <h3 className="font-medium mb-2">Categorías Rápidas</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {popularCategories.slice(0, 6).map((cat) => (
+                <Button
+                  key={cat.id}
+                  variant="outline"
+                  className={cn(
+                    "h-auto py-2 px-3 justify-start gap-2 text-left",
+                    cat.id === category && "border-primary"
+                  )}
+                  onClick={() => {
+                    handleCategoryClick(cat.id);
+                  }}
+                >
+                  <div className={`rounded-full p-1 ${cat.color}`}>
+                    {React.cloneElement(cat.icon as React.ReactElement, {
+                      className: "h-4 w-4",
+                    })}
+                  </div>
+                  <span className="truncate">{cat.name}</span>
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <div
+          className="bg-white dark:bg-gray-800 rounded-full shadow-lg p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          onClick={scrollToTop}
+        >
+          <ChevronUp className="h-6 w-6 text-primary" />
+        </div>
+      </div>
+    );
+  };
+
+  // Handle touch swipe gestures for scrolling
+  useEffect(() => {
+    const handleTouchSwipe = () => {
+      const scrollAreas = [
+        document.querySelector(
+          "#trending-scroll-area [data-radix-scroll-area-viewport]"
+        ),
+        document.querySelector(
+          "#places-scroll-area [data-radix-scroll-area-viewport]"
+        ),
+      ];
+
+      scrollAreas.forEach((scrollArea) => {
+        if (!scrollArea) return;
+
+        let startX: number;
+        let startScrollLeft: number;
+
+        const onTouchStart = (e: TouchEvent) => {
+          startX = e.touches[0].clientX;
+          startScrollLeft = scrollArea.scrollLeft;
+        };
+
+        const onTouchMove = (e: TouchEvent) => {
+          if (!startX) return;
+
+          const x = e.touches[0].clientX;
+          const distance = startX - x;
+          scrollArea.scrollLeft = startScrollLeft + distance;
+        };
+
+        const onTouchEnd = () => {
+          startX = null as any;
+        };
+
+        scrollArea.addEventListener("touchstart", onTouchStart);
+        scrollArea.addEventListener("touchmove", onTouchMove);
+        scrollArea.addEventListener("touchend", onTouchEnd);
+
+        return () => {
+          scrollArea.removeEventListener("touchstart", onTouchStart);
+          scrollArea.removeEventListener("touchmove", onTouchMove);
+          scrollArea.removeEventListener("touchend", onTouchEnd);
+        };
+      });
+    };
+
+    // Set a timeout to ensure the DOM elements are available
+    const timeout = setTimeout(handleTouchSwipe, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [trendingPlaces.length, filteredPlaces.length]);
+
+  // Function to render a swipe hint indicator
+  const SwipeIndicator = () => (
+    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground my-2">
+      <div className="flex items-center bg-muted/30 px-3 py-1 rounded-full">
+        <div className="relative w-5 h-5">
+          <span className="absolute left-0 top-0 h-5 w-5 animate-ping opacity-30">
+            <ChevronLeft className="h-5 w-5" />
+          </span>
+          <ChevronLeft className="h-5 w-5" />
+        </div>
+        <span className="mx-2">Deslizar</span>
+        <div className="relative w-5 h-5">
+          <span className="absolute left-0 top-0 h-5 w-5 animate-ping opacity-30">
+            <ChevronRight className="h-5 w-5" />
+          </span>
+          <ChevronRight className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
+  );
+
+  // Effect to track scroll position and update indicators
+  useEffect(() => {
+    const handleScrollPositionUpdate = () => {
+      const trendingArea = document.querySelector(
+        "#trending-scroll-area [data-radix-scroll-area-viewport]"
+      );
+      const placesArea = document.querySelector(
+        "#places-scroll-area [data-radix-scroll-area-viewport]"
+      );
+
+      if (trendingArea) {
+        const handleTrendingScroll = () => {
+          const cardWidth = 288; // 272px card + 16px gap
+          const scrollPosition = trendingArea.scrollLeft;
+          const currentIndex = Math.round(scrollPosition / (cardWidth * 3));
+          setTrendingScrollIndex(currentIndex);
+        };
+
+        trendingArea.addEventListener("scroll", handleTrendingScroll);
+        return () =>
+          trendingArea.removeEventListener("scroll", handleTrendingScroll);
+      }
+
+      if (placesArea) {
+        const handlePlacesScroll = () => {
+          const cardWidth = 288; // 272px card + 16px gap
+          const scrollPosition = placesArea.scrollLeft;
+          const currentIndex = Math.round(scrollPosition / (cardWidth * 3));
+          setPlacesScrollIndex(currentIndex);
+        };
+
+        placesArea.addEventListener("scroll", handlePlacesScroll);
+        return () =>
+          placesArea.removeEventListener("scroll", handlePlacesScroll);
+      }
+    };
+
+    // Set a timeout to ensure the DOM elements are available
+    const timeout = setTimeout(handleScrollPositionUpdate, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [trendingPlaces.length, filteredPlaces.length]);
+
+  // Effect to fetch category counts when coordinates are available
+  useEffect(() => {
+    if (coordinates) {
+      fetchCategoryCounts();
+    }
+  }, [coordinates?.lat, coordinates?.lng]);
+
+  // Function to fetch and update category counts
+  const fetchCategoryCounts = async () => {
+    if (!coordinates?.lat || !coordinates?.lng) return;
+
+    try {
+      // Create location string from coordinates
+      const locationStr = `${coordinates.lat},${coordinates.lng}`;
+
+      // List of all categories we want to fetch counts for
+      const categories = [
+        "restaurant",
+        "beach",
+        "hotel",
+        "bar",
+        "cafe",
+        "services",
+        "entertainment",
+        "shopping",
+      ];
+
+      // Use Promise.all to fetch all category counts in parallel
+      const countPromises = categories.map((category) =>
+        fetch(
+          `/api/places/trending?location=${locationStr}&type=${category}&countOnly=true`
+        )
+          .then((res) => res.json())
+          .then((data) => ({ category, count: data.totalFound || 0 }))
+          .catch((err) => {
+            console.error(`Error fetching count for ${category}:`, err);
+            return { category, count: 0 };
+          })
+      );
+
+      const results = await Promise.all(countPromises);
+
+      // Update state with all the counts
+      const newCounts = { ...categoryCounts };
+      results.forEach((result) => {
+        newCounts[result.category as keyof typeof categoryCounts] =
+          result.count;
+      });
+
+      setCategoryCounts(newCounts);
+    } catch (error) {
+      console.error("Error fetching category counts:", error);
+    }
+  };
+
+  // Add a function to get AI suggestions
+  const getAISuggestions = async () => {
+    if (!location) {
+      toast({
+        title: "Location Required",
+        description: "Please enter a location to get suggestions",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAiSuggestionsLoading(true);
+    setAiSuggestions([]);
+
+    try {
+      const response = await fetch("/api/places/ai-suggestions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          location: location,
+          query: searchQuery,
+          interests: [category],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to get AI suggestions");
+      }
+
+      const data = await response.json();
+      setAiSuggestions(data.suggestions || []);
+      setAiSuggestionsOpen(true);
+    } catch (error: any) {
+      console.error("Error getting AI suggestions:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to get AI suggestions",
+        variant: "destructive",
+      });
+    } finally {
+      setAiSuggestionsLoading(false);
+    }
+  };
+
   return (
     <Card className="border shadow-lg h-[calc(100vh-120px)]">
+      {/* Floating back to top button */}
+      <FloatingControls />
       <CardHeader className="border-b bg-muted/40 px-6">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
@@ -483,8 +1081,16 @@ export default function TravelGuide() {
         </div>
       </CardHeader>
 
-      <CardContent className="p-6 overflow-hidden h-[calc(100vh-220px)]">
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
+      <CardContent className="p-6 overflow-auto h-[calc(100vh-220px)]">
+        <div
+          className="flex flex-col md:flex-row gap-4 mb-6 sticky top-0 z-10 bg-background pt-2 pb-4 shadow-sm border-b border-opacity-0 transition-all duration-200"
+          style={{
+            borderColor: showBackToTop ? "var(--border)" : "transparent",
+            boxShadow: showBackToTop
+              ? "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
+              : "none",
+          }}
+        >
           <form onSubmit={handleSearch} className="flex-1 flex gap-2">
             <div className="relative flex-1">
               <Popover open={suggestionsOpen} onOpenChange={setSuggestionsOpen}>
@@ -520,7 +1126,7 @@ export default function TravelGuide() {
                 >
                   <Command>
                     <CommandList>
-                      <CommandEmpty>No location found</CommandEmpty>
+                      <CommandEmpty>No se encontraron resultados</CommandEmpty>
                       <CommandGroup>
                         {locationSuggestions.map((suggestion) => (
                           <CommandItem
@@ -544,7 +1150,19 @@ export default function TravelGuide() {
               </Popover>
             </div>
 
-            <Select value={category} onValueChange={setCategory}>
+            <Select
+              value={category}
+              onValueChange={(value) => {
+                setCategory(value);
+                // Automatically search when category changes via dropdown
+                if (coordinates) {
+                  // Add a small delay to ensure state is updated
+                  setTimeout(() => {
+                    handleCategoryClick(value);
+                  }, 10);
+                }
+              }}
+            >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
@@ -559,6 +1177,21 @@ export default function TravelGuide() {
                 <SelectItem value="park">Parks</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 gap-2"
+              disabled={!location || aiSuggestionsLoading}
+              onClick={getAISuggestions}
+            >
+              {aiSuggestionsLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Bot className="h-4 w-4" />
+              )}
+              AI Suggestions
+            </Button>
 
             <Button
               type="submit"
@@ -690,17 +1323,52 @@ export default function TravelGuide() {
           </div>
         </div>
 
+        {/* Popular Categories Section */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-4">Categorías Populares</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {popularCategories.map((cat) => (
+              <div
+                key={cat.id}
+                className={`border rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-md active:scale-95 active:opacity-80 ${
+                  cat.id === category ? "ring-2 ring-primary shadow-md" : ""
+                }`}
+                onClick={() => handleCategoryClick(cat.id)}
+              >
+                <div
+                  className={`p-8 flex justify-center items-center transition-colors ${cat.color}`}
+                >
+                  {cat.icon}
+                </div>
+                <div className="p-4 text-center">
+                  <h3 className="font-medium">{cat.name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {cat.count} lugares
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Trending Places Section */}
         {trendingPlaces.length > 0 && !loading && (
-          <div className="mb-6">
+          <div className="mb-6 travel-results-section">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="h-5 w-5 text-primary" />
               <h2 className="text-lg font-semibold">
-                Trending {category.replace("_", " ")}s
+                {category
+                  .replace("_", " ")
+                  .replace(/(^\w|\s\w)/g, (m) => m.toUpperCase())}{" "}
+                Populares
               </h2>
             </div>
-            <ScrollArea className="whitespace-nowrap pb-4">
-              <div className="flex gap-4">
+            <SwipeIndicator />
+            <ScrollArea
+              className="whitespace-nowrap pb-4 relative"
+              id="trending-scroll-area"
+            >
+              <div className="flex gap-4 px-1 pb-1">
                 {trendingPlaces.map((place) => (
                   <Card
                     key={place.id}
@@ -712,6 +1380,13 @@ export default function TravelGuide() {
                         src={place.image || "/placeholder.svg"}
                         alt={place.name}
                         className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          // Replace broken images with placeholder
+                          (e.target as HTMLImageElement).src =
+                            "/placeholder.svg";
+                          console.log("Image failed to load:", place.image);
+                        }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                       <div className="absolute bottom-0 left-0 p-3 text-white">
@@ -756,20 +1431,79 @@ export default function TravelGuide() {
                   </Card>
                 ))}
               </div>
+
+              {/* Scroll indicators */}
+              <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 py-1">
+                {Array.from({
+                  length: Math.ceil(trendingPlaces.length / 3),
+                }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1 w-6 rounded-full transition-colors ${
+                      i === trendingScrollIndex
+                        ? "bg-primary"
+                        : "bg-muted-foreground/20 hover:bg-muted-foreground/40"
+                    }`}
+                    onClick={() => {
+                      const scrollContainer = document.querySelector(
+                        "#trending-scroll-area [data-radix-scroll-area-viewport]"
+                      );
+                      if (scrollContainer) {
+                        const cardWidth = 288; // 272px card + 16px gap
+                        const scrollPosition = i * cardWidth * 3;
+                        scrollContainer.scrollTo({
+                          left: scrollPosition,
+                          behavior: "smooth",
+                        });
+                        setTrendingScrollIndex(i);
+                      }
+                    }}
+                    style={{ cursor: "pointer" }}
+                  />
+                ))}
+              </div>
+
+              <button
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                onClick={() => {
+                  const scrollContainer = document.querySelector(
+                    "#trending-scroll-area [data-radix-scroll-area-viewport]"
+                  );
+                  if (scrollContainer) {
+                    const cardWidth = 288; // 272px card + 16px gap
+                    scrollContainer.scrollBy({
+                      left: -cardWidth * 2,
+                      behavior: "smooth",
+                    });
+                  }
+                }}
+                aria-label="Scroll left"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                onClick={() => {
+                  const scrollContainer = document.querySelector(
+                    "#trending-scroll-area [data-radix-scroll-area-viewport]"
+                  );
+                  if (scrollContainer) {
+                    const cardWidth = 288; // 272px card + 16px gap
+                    scrollContainer.scrollBy({
+                      left: cardWidth * 2,
+                      behavior: "smooth",
+                    });
+                  }
+                }}
+                aria-label="Scroll right"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
             </ScrollArea>
           </div>
         )}
 
-        {trendingLoading && !loading && (
-          <div className="mb-6 flex items-center space-x-2">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <p className="text-muted-foreground text-sm">
-              Loading trending places...
-            </p>
-          </div>
-        )}
-
-        {loading && (
+        {(trendingLoading || loading) && (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
             <div className="relative w-24 h-24">
               <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping"></div>
@@ -777,13 +1511,103 @@ export default function TravelGuide() {
               <Loader2 className="absolute inset-0 m-auto h-12 w-12 animate-spin text-primary" />
             </div>
             <p className="text-muted-foreground">
-              Discovering amazing places...
+              {category
+                ? `Buscando ${category.replace(
+                    "_",
+                    " "
+                  )} populares cerca de ti...`
+                : "Descubriendo lugares increíbles..."}
             </p>
           </div>
         )}
 
+        {!coordinates && !loading && (
+          <div className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+            <MapPin className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-lg font-semibold">
+              Encuentra lugares para visitar
+            </h3>
+            <p className="text-muted-foreground max-w-[260px]">
+              Ingresa tu ubicación para descubrir lugares populares cerca de ti
+            </p>
+
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <Button
+                variant="default"
+                className="gap-2"
+                onClick={() => {
+                  if (navigator.geolocation) {
+                    toast({
+                      title: "Solicitando ubicación",
+                      description:
+                        "Por favor permite el acceso a tu ubicación cuando el navegador lo solicite",
+                    });
+
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        const coords = {
+                          lat: position.coords.latitude,
+                          lng: position.coords.longitude,
+                        };
+                        setCoordinates(coords);
+
+                        // Try to get address
+                        fetch(
+                          `/api/geocode/reverse?lat=${coords.lat}&lng=${coords.lng}`
+                        )
+                          .then((response) => response.json())
+                          .then((data) => {
+                            if (data.address) {
+                              setLocationInputValue(data.address);
+                              setLocation(data.address);
+                            }
+                          })
+                          .catch(console.error);
+                      },
+                      (error) => {
+                        console.error("Geolocation error:", error);
+                        toast({
+                          title: "Error de ubicación",
+                          description:
+                            "No se pudo obtener tu ubicación. Prueba ingresar una manualmente.",
+                          variant: "destructive",
+                        });
+                      },
+                      {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0,
+                      }
+                    );
+                  } else {
+                    toast({
+                      title: "Geolocalización no soportada",
+                      description:
+                        "Tu navegador no soporta geolocalización. Ingresa tu ubicación manualmente.",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                <MapPin className="h-4 w-4 mr-2" />
+                Usar mi ubicación actual
+              </Button>
+
+              <Separator className="my-2" />
+
+              <Button
+                variant="outline"
+                onClick={() => setSearchInputOpen(true)}
+              >
+                <MapIcon className="h-4 w-4 mr-2" />
+                Buscar ubicación
+              </Button>
+            </div>
+          </div>
+        )}
+
         {filteredPlaces.length > 0 && !loading && (
-          <div className="h-full">
+          <div className="h-full travel-results-section">
             <TabsContent value="grid" className="m-0 h-full">
               <ScrollArea className="h-[calc(100vh-440px)]">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -798,6 +1622,13 @@ export default function TravelGuide() {
                           src={place.image || "/placeholder.svg"}
                           alt={place.name}
                           className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            // Replace broken images with placeholder
+                            (e.target as HTMLImageElement).src =
+                              "/placeholder.svg";
+                            console.log("Image failed to load:", place.image);
+                          }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                         <div className="absolute bottom-0 left-0 p-3 text-white">
@@ -816,13 +1647,21 @@ export default function TravelGuide() {
                             )}
                           </div>
                         </div>
-                        <div className="absolute top-2 right-2 flex gap-2">
+                        <div className="absolute top-2 right-2 flex flex-col gap-1">
                           <Badge
                             variant={place.openNow ? "default" : "secondary"}
-                            className="font-medium"
+                            className="font-medium text-xs"
                           >
-                            {place.openNow ? "Open Now" : "Closed"}
+                            {place.openNow ? "Open" : "Closed"}
                           </Badge>
+                          {place.priceLevel !== "N/A" && (
+                            <Badge
+                              variant="outline"
+                              className="bg-white/80 text-black font-medium text-xs"
+                            >
+                              {place.priceLevel}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                       <CardContent className="p-4">
@@ -866,6 +1705,135 @@ export default function TravelGuide() {
               </ScrollArea>
             </TabsContent>
 
+            {/* Responsive alternative for smaller screens */}
+            <div className="block md:hidden mb-6">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                Desliza para ver más lugares
+              </h3>
+              <SwipeIndicator />
+              <ScrollArea
+                className="whitespace-nowrap pb-4 relative"
+                id="places-scroll-area"
+              >
+                <div className="flex gap-4 px-1 pb-1">
+                  {filteredPlaces.map((place) => (
+                    <Card
+                      key={place.id}
+                      className="w-72 shrink-0 overflow-hidden transition-all hover:shadow-lg cursor-pointer"
+                      onClick={() => handlePlaceSelect(place)}
+                    >
+                      <div className="relative h-40">
+                        <img
+                          src={place.image || "/placeholder.svg"}
+                          alt={place.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              "/placeholder.svg";
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <div className="absolute bottom-0 left-0 p-3 text-white">
+                          <h3 className="font-semibold text-lg line-clamp-1">
+                            {place.name}
+                          </h3>
+                          <div className="flex items-center gap-1 mt-1">
+                            {renderStars(place.rating)}
+                            <span className="text-sm ml-1">
+                              {place.rating.toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="absolute top-2 right-2 flex flex-col gap-1">
+                          <Badge
+                            variant={place.openNow ? "default" : "secondary"}
+                            className="font-medium text-xs"
+                          >
+                            {place.openNow ? "Open" : "Closed"}
+                          </Badge>
+                        </div>
+                      </div>
+                      <CardFooter className="p-3 flex items-start gap-2 text-muted-foreground">
+                        <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                        <span className="text-xs line-clamp-2">
+                          {place.address}
+                        </span>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Scroll indicators */}
+                <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 py-1">
+                  {Array.from({
+                    length: Math.ceil(filteredPlaces.length / 3),
+                  }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 w-6 rounded-full transition-colors ${
+                        i === placesScrollIndex
+                          ? "bg-primary"
+                          : "bg-muted-foreground/20 hover:bg-muted-foreground/40"
+                      }`}
+                      onClick={() => {
+                        const scrollContainer = document.querySelector(
+                          "#places-scroll-area [data-radix-scroll-area-viewport]"
+                        );
+                        if (scrollContainer) {
+                          const cardWidth = 288; // 272px card + 16px gap
+                          const scrollPosition = i * cardWidth * 3;
+                          scrollContainer.scrollTo({
+                            left: scrollPosition,
+                            behavior: "smooth",
+                          });
+                          setPlacesScrollIndex(i);
+                        }
+                      }}
+                      style={{ cursor: "pointer" }}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                  onClick={() => {
+                    const scrollContainer = document.querySelector(
+                      "#places-scroll-area [data-radix-scroll-area-viewport]"
+                    );
+                    if (scrollContainer) {
+                      const cardWidth = 288; // 272px card + 16px gap
+                      scrollContainer.scrollBy({
+                        left: -cardWidth * 2,
+                        behavior: "smooth",
+                      });
+                    }
+                  }}
+                  aria-label="Scroll left"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                  onClick={() => {
+                    const scrollContainer = document.querySelector(
+                      "#places-scroll-area [data-radix-scroll-area-viewport]"
+                    );
+                    if (scrollContainer) {
+                      const cardWidth = 288; // 272px card + 16px gap
+                      scrollContainer.scrollBy({
+                        left: cardWidth * 2,
+                        behavior: "smooth",
+                      });
+                    }
+                  }}
+                  aria-label="Scroll right"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </ScrollArea>
+            </div>
+
             <TabsContent value="map" className="m-0 h-full">
               <div className="relative h-[calc(100vh-320px)] bg-muted rounded-lg overflow-hidden">
                 {coordinates ? (
@@ -885,7 +1853,7 @@ export default function TravelGuide() {
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <MapIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                       <p className="text-muted-foreground">
                         Enter a location to view the map
                       </p>
@@ -941,12 +1909,26 @@ export default function TravelGuide() {
                           src={selectedPlace.photos[0].url}
                           alt={selectedPlace.name}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Replace broken images with placeholder
+                            (e.target as HTMLImageElement).src =
+                              "/placeholder.svg";
+                            console.log(
+                              "Photo failed to load:",
+                              selectedPlace.photos?.[0]?.url
+                            );
+                          }}
                         />
                       ) : (
                         <img
                           src={selectedPlace.image || "/placeholder.svg"}
                           alt={selectedPlace.name}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Replace broken images with placeholder
+                            (e.target as HTMLImageElement).src =
+                              "/placeholder.svg";
+                          }}
                         />
                       )}
                     </div>
@@ -1052,6 +2034,16 @@ export default function TravelGuide() {
                           )}
                       </div>
 
+                      {/* AI-generated description */}
+                      {selectedPlace.aiDescription && (
+                        <div>
+                          <h3 className="font-medium mb-2">About this place</h3>
+                          <p className="text-sm">
+                            {selectedPlace.aiDescription}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Categories Section */}
                       <div>
                         <h3 className="font-medium mb-2">Categories</h3>
@@ -1063,6 +2055,21 @@ export default function TravelGuide() {
                           ))}
                         </div>
                       </div>
+
+                      {/* AI-generated recommendations */}
+                      {selectedPlace.aiRecommendations && (
+                        <div>
+                          <h3 className="font-medium mb-2">
+                            Tips & Recommendations
+                          </h3>
+                          <div
+                            className="text-sm space-y-1"
+                            dangerouslySetInnerHTML={{
+                              __html: selectedPlace.aiRecommendations,
+                            }}
+                          />
+                        </div>
+                      )}
 
                       {/* Photo Gallery Section */}
                       {selectedPlace.photos &&
@@ -1084,6 +2091,16 @@ export default function TravelGuide() {
                                           index + 1
                                         }`}
                                         className="w-full h-full object-cover"
+                                        loading="lazy"
+                                        onError={(e) => {
+                                          // Replace broken images with placeholder
+                                          (e.target as HTMLImageElement).src =
+                                            "/placeholder.svg";
+                                          console.log(
+                                            "Gallery photo failed to load:",
+                                            photo.url
+                                          );
+                                        }}
                                       />
                                     </div>
                                   ))}
@@ -1107,6 +2124,22 @@ export default function TravelGuide() {
                                           <img
                                             src={review.authorPhoto}
                                             alt={review.authorName}
+                                            onError={(e) => {
+                                              // If profile photo fails, replace with User icon
+                                              e.currentTarget.style.display =
+                                                "none";
+                                              const parent =
+                                                e.currentTarget.parentElement;
+                                              if (parent) {
+                                                const userIcon =
+                                                  document.createElement("div");
+                                                userIcon.className =
+                                                  "h-full w-full flex items-center justify-center";
+                                                userIcon.innerHTML =
+                                                  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user h-4 w-4"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+                                                parent.appendChild(userIcon);
+                                              }
+                                            }}
                                           />
                                         ) : (
                                           <User className="h-4 w-4" />
@@ -1151,6 +2184,30 @@ export default function TravelGuide() {
                           Get Directions
                         </Button>
                       </div>
+
+                      {/* After the Categories Section in the selected place details dialog */}
+                      {selectedPlace?.aiDescription && (
+                        <div className="mt-4">
+                          <h3 className="font-medium mb-2">AI Description</h3>
+                          <p className="text-sm">
+                            {selectedPlace.aiDescription}
+                          </p>
+                        </div>
+                      )}
+
+                      {selectedPlace?.aiRecommendations && (
+                        <div className="mt-4">
+                          <h3 className="font-medium mb-2">
+                            Tips & Recommendations
+                          </h3>
+                          <div
+                            className="text-sm space-y-1"
+                            dangerouslySetInnerHTML={{
+                              __html: selectedPlace.aiRecommendations,
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
@@ -1158,6 +2215,81 @@ export default function TravelGuide() {
             </SheetContent>
           </Sheet>
         )}
+
+        {/* AI Suggestions Dialog */}
+        <Dialog open={aiSuggestionsOpen} onOpenChange={setAiSuggestionsOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>AI Travel Suggestions</DialogTitle>
+              <DialogDescription>
+                Personalized recommendations for {location}
+              </DialogDescription>
+            </DialogHeader>
+            {aiSuggestions.length > 0 ? (
+              <div className="space-y-4 mt-4">
+                {aiSuggestions.map((suggestion, index) => (
+                  <Card
+                    key={index}
+                    className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      setSearchQuery(suggestion.name);
+                      setAiSuggestionsOpen(false);
+                      // Direct call to handleSearch instead of form submission
+                      setTimeout(() => {
+                        handleSearch({
+                          preventDefault: () => {},
+                        } as React.FormEvent);
+                      }, 300);
+                    }}
+                  >
+                    <CardHeader className="p-4 pb-2">
+                      <CardTitle className="text-base">
+                        {suggestion.name}
+                      </CardTitle>
+                      <Badge variant="outline">{suggestion.type}</Badge>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        {suggestion.reason}
+                      </p>
+                    </CardContent>
+                    <CardFooter className="p-4 pt-0 flex justify-end">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent event bubbling
+                          setSearchQuery(suggestion.name);
+                          setAiSuggestionsOpen(false);
+                          // Submit the form with a small delay
+                          setTimeout(() => {
+                            const form = document.querySelector(
+                              "form"
+                            ) as HTMLFormElement;
+                            if (form)
+                              form.dispatchEvent(
+                                new Event("submit", { cancelable: true })
+                              );
+                          }, 100);
+                        }}
+                      >
+                        Search this place
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[200px]">
+                <Bot className="h-10 w-10 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  No suggestions available
+                </p>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

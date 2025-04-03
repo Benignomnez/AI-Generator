@@ -56,7 +56,7 @@ This application now uses environment variables for API keys, providing better s
 
 The application supports various AI models:
 - OpenAI: GPT-4o, GPT-4, GPT-3.5-turbo
-- Google: Gemini Pro
+- Google: Gemini Flash 2.0
 - Anthropic: Claude 3 Opus
 
 ## Development

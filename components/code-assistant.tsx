@@ -1,53 +1,102 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, Copy, Check, CodeIcon, Wand2 } from "lucide-react"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Copy, Check, CodeIcon, Wand2 } from "lucide-react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { useAIModel } from "@/hooks/use-ai-model";
 
 export default function CodeAssistant() {
-  const [input, setInput] = useState("")
-  const [output, setOutput] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [language, setLanguage] = useState("javascript")
+  const { toast } = useToast();
+  const { currentModel } = useAIModel();
+  const [input, setInput] = useState("");
+  const [output, setOutput] = useState("");
+  const [explanation, setExplanation] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [language, setLanguage] = useState("javascript");
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim()) return
+    e.preventDefault();
+    if (!input.trim()) return;
 
-    setLoading(true)
-    // Simulate code generation/revision
-    setTimeout(() => {
-      setOutput(`// Here's the revised code
-function calculateTotal(items) {
-  return items.reduce((total, item) => {
-    return total + (item.price * item.quantity);
-  }, 0);
-}
+    setLoading(true);
+    setOutput("");
+    setExplanation("");
 
-// Example usage
-const cart = [
-  { name: 'Product 1', price: 10, quantity: 2 },
-  { name: 'Product 2', price: 15, quantity: 1 },
-];
+    try {
+      // First, get the revised code
+      const reviseResponse = await fetch("/api/code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: input,
+          language,
+          action: "revise",
+          model: currentModel.id,
+        }),
+      });
 
-const total = calculateTotal(cart);
-console.log(\`Total: $\${total}\`);`)
-      setLoading(false)
-    }, 1500)
-  }
+      if (!reviseResponse.ok) {
+        const errorData = await reviseResponse.json();
+        throw new Error(errorData.error || "Failed to revise code");
+      }
+
+      const reviseData = await reviseResponse.json();
+      setOutput(reviseData.result);
+
+      // Then, get the explanation
+      const explainResponse = await fetch("/api/code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: input,
+          language,
+          action: "explain",
+          model: currentModel.id,
+        }),
+      });
+
+      if (!explainResponse.ok) {
+        const errorData = await explainResponse.json();
+        throw new Error(errorData.error || "Failed to explain code");
+      }
+
+      const explainData = await explainResponse.json();
+      setExplanation(explainData.result);
+    } catch (error: any) {
+      console.error("Code assistant error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(output)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    navigator.clipboard.writeText(output);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <Card className="border shadow-lg h-[calc(100vh-120px)]">
@@ -58,7 +107,9 @@ console.log(\`Total: $\${total}\`);`)
           </div>
           <div>
             <CardTitle className="text-lg">Code Assistant</CardTitle>
-            <CardDescription>Generate, revise, and optimize code</CardDescription>
+            <CardDescription>
+              Generate, revise, and optimize code
+            </CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -71,7 +122,12 @@ console.log(\`Total: $\${total}\`);`)
                 <h3 className="font-medium">Input</h3>
                 <div className="flex gap-2">
                   <Badge variant="outline">{language}</Badge>
-                  <Button type="submit" size="sm" disabled={loading || !input.trim()} className="h-8">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={loading || !input.trim()}
+                    className="h-8"
+                  >
                     {loading ? (
                       <>
                         <Loader2 className="mr-2 h-3 w-3 animate-spin" />
@@ -99,7 +155,12 @@ console.log(\`Total: $\${total}\`);`)
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-medium">Output</h3>
               {output && (
-                <Button variant="outline" size="sm" onClick={copyToClipboard} className="h-8">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyToClipboard}
+                  className="h-8"
+                >
                   {copied ? (
                     <>
                       <Check className="mr-2 h-3 w-3" />
@@ -116,7 +177,10 @@ console.log(\`Total: $\${total}\`);`)
             </div>
 
             {output ? (
-              <Tabs defaultValue="code" className="border rounded-lg overflow-hidden">
+              <Tabs
+                defaultValue="code"
+                className="border rounded-lg overflow-hidden"
+              >
                 <TabsList className="bg-muted border-b rounded-none">
                   <TabsTrigger value="code">Code</TabsTrigger>
                   <TabsTrigger value="explanation">Explanation</TabsTrigger>
@@ -126,29 +190,35 @@ console.log(\`Total: $\${total}\`);`)
                     <code>{output}</code>
                   </pre>
                 </TabsContent>
-                <TabsContent value="explanation" className="p-4 m-0 max-h-[300px] overflow-auto">
-                  <p>
-                    This code creates a function called <code>calculateTotal</code> that takes an array of items and
-                    calculates the total price by multiplying each item's price by its quantity and summing them up. The
-                    example demonstrates how to use this function with a shopping cart.
-                  </p>
+                <TabsContent
+                  value="explanation"
+                  className="p-4 m-0 max-h-[300px] overflow-auto"
+                >
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: explanation.replace(/\n/g, "<br />"),
+                    }}
+                  />
                 </TabsContent>
               </Tabs>
             ) : loading ? (
               <div className="flex flex-col items-center justify-center h-[300px] border rounded-lg bg-muted/30">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-                <p className="text-sm text-muted-foreground">Processing your code...</p>
+                <p className="text-sm text-muted-foreground">
+                  Processing your code...
+                </p>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-[300px] border rounded-lg bg-muted/30">
                 <CodeIcon className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">Output will appear here</p>
+                <p className="text-sm text-muted-foreground">
+                  Output will appear here
+                </p>
               </div>
             )}
           </div>
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
-

@@ -4,24 +4,17 @@ export async function POST(req: NextRequest) {
   try {
     // Parse the request body
     const body = await req.json();
-    const { messages, model } = body;
+    const { query, model = "gpt-4" } = body;
 
     // Get API key from environment variable based on selected model provider
     let apiKey = "";
     if (model.startsWith("gpt-")) {
       apiKey = process.env.OPENAI_API_KEY || "";
-    } else if (model.startsWith("gemini-") || model === "gemini-flash-2.0") {
+    } else if (model.startsWith("gemini-")) {
       apiKey = process.env.GOOGLE_API_KEY || "";
     } else if (model.startsWith("claude-")) {
       apiKey = process.env.ANTHROPIC_API_KEY || "";
     }
-
-    // Debug log (remove in production)
-    console.log("Direct API route received request:", {
-      hasEnvApiKey: !!apiKey,
-      model,
-      messageCount: messages?.length,
-    });
 
     // Validate API key
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
@@ -35,17 +28,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      console.error("Messages are invalid");
-      return new Response(JSON.stringify({ error: "Messages are required" }), {
+    if (!query || typeof query !== "string" || !query.trim()) {
+      console.error("Query is invalid");
+      return new Response(JSON.stringify({ error: "Query is required" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
+    // Create the system message for research
+    const systemMessage = {
+      role: "system",
+      content: `You are a research assistant. The user will provide a topic, and you need to:
+      1. Create a comprehensive summary of the topic
+      2. Generate 3-5 relevant sources with titles, summaries, and hypothetical URLs
+      3. Format your response as JSON with the following structure:
+      {
+        "summary": "comprehensive summary text",
+        "sources": [
+          {
+            "title": "Source title",
+            "summary": "Brief description of the source",
+            "source": "Publication name",
+            "url": "https://example.com/source",
+            "date": "YYYY-MM-DD"
+          }
+        ]
+      }`,
+    };
+
+    // Create user message with the query
+    const userMessage = {
+      role: "user",
+      content: `Research this topic: ${query}`,
+    };
+
+    // Messages array with system and user messages
+    const messages = [systemMessage, userMessage];
+
+    let responseContent = "";
+
     // Determine which API to call based on model
     if (model.startsWith("gpt-")) {
       // Call OpenAI API
+      // Basic request body without response_format to ensure compatibility with all models
+      const requestBody = {
+        model: model,
+        messages: messages,
+        temperature: 0.7,
+      };
+
+      console.log("Using OpenAI model:", model);
+
       const openaiResponse = await fetch(
         "https://api.openai.com/v1/chat/completions",
         {
@@ -54,11 +88,7 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({
-            model: model,
-            messages: messages,
-            temperature: 0.7,
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -78,25 +108,12 @@ export async function POST(req: NextRequest) {
       }
 
       const data = await openaiResponse.json();
-
-      // Return the response
-      return new Response(
-        JSON.stringify({
-          content: data.choices[0].message.content,
-          role: data.choices[0].message.role,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    } else if (model.startsWith("gemini-") || model === "gemini-flash-2.0") {
-      // Use the correct model name from the documentation
+      responseContent = data.choices[0].message.content;
+    } else if (model.startsWith("gemini-")) {
+      // Call Google's Gemini API
       const geminiModelName = "gemini-2.0-flash";
+      console.log("Using Gemini model:", geminiModelName);
 
-      console.log(`Using Gemini model: ${geminiModelName}`);
-
-      // Call Google's Gemini API with the correct model name
       const geminiResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${geminiModelName}:generateContent?key=${apiKey}`,
         {
@@ -105,18 +122,18 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            contents: messages.map((msg) => ({
-              role:
-                msg.role === "assistant"
-                  ? "model"
-                  : msg.role === "user"
-                  ? "user"
-                  : msg.role,
-              parts: [{ text: msg.content }],
-            })),
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: systemMessage.content + "\n\n" + userMessage.content,
+                  },
+                ],
+              },
+            ],
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 1024,
             },
           }),
         }
@@ -138,18 +155,7 @@ export async function POST(req: NextRequest) {
       }
 
       const data = await geminiResponse.json();
-
-      // Return the response (format may need adjusting based on Gemini's response structure)
-      return new Response(
-        JSON.stringify({
-          content: data.candidates[0]?.content?.parts[0]?.text || "",
-          role: "assistant",
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      responseContent = data.candidates[0]?.content?.parts[0]?.text || "";
     } else if (model.startsWith("claude-")) {
       // Call Anthropic's Claude API
       const claudeResponse = await fetch(
@@ -163,8 +169,14 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             model: model,
-            messages: messages,
-            max_tokens: 1024,
+            system: systemMessage.content,
+            messages: [
+              {
+                role: "user",
+                content: userMessage.content,
+              },
+            ],
+            max_tokens: 1500,
           }),
         }
       );
@@ -185,18 +197,7 @@ export async function POST(req: NextRequest) {
       }
 
       const data = await claudeResponse.json();
-
-      // Return the response (format may need adjusting based on Claude's response structure)
-      return new Response(
-        JSON.stringify({
-          content: data.content[0]?.text || "",
-          role: "assistant",
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      responseContent = data.content[0]?.text || "";
     } else {
       return new Response(
         JSON.stringify({
@@ -208,8 +209,53 @@ export async function POST(req: NextRequest) {
         }
       );
     }
+
+    // Parse the JSON response
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseContent);
+    } catch (error) {
+      console.error("Error parsing response as JSON:", error);
+      console.log("Response content:", responseContent);
+
+      // Try to extract JSON from the response using regex
+      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsedResponse = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          return new Response(
+            JSON.stringify({
+              error: "Failed to parse response as JSON",
+              details: responseContent,
+            }),
+            {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+      } else {
+        return new Response(
+          JSON.stringify({
+            error: "Failed to parse response as JSON",
+            details: responseContent,
+          }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
+    // Return the parsed response
+    return new Response(JSON.stringify(parsedResponse), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error: any) {
-    console.error("Error in direct chat API:", error);
+    console.error("Error in research API:", error);
     return new Response(
       JSON.stringify({
         error: "An error occurred during your request.",

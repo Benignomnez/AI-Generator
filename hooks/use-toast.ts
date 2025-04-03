@@ -25,8 +25,8 @@ export function useToast() {
 
     // Auto-dismiss after duration
     setTimeout(() => {
-      setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id))
-    }, props.duration || 3000)
+      setToasts((prevToasts) => prevToasts.filter((t) => t.id !== id))
+    }, props.duration ?? 3000)
 
     // For debugging purposes, log the toast to console
     console.log(`Toast: ${props.title} - ${props.description}`)

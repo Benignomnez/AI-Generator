@@ -28,12 +28,11 @@ const models = [
     icon: "🚀",
     provider: "openai",
   },
-  { value: "gemini-pro", label: "Gemini Pro", icon: "⚡", provider: "google" },
   {
-    value: "claude-3-opus",
-    label: "Claude 3 Opus",
-    icon: "🔮",
-    provider: "anthropic",
+    value: "gemini-2.0-flash",
+    label: "Google Gemini Flash 2.0",
+    icon: "⚡",
+    provider: "google",
   },
 ];
 

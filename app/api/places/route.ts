@@ -60,7 +60,9 @@ export async function GET(request: NextRequest) {
       openNow: place.opening_hours?.open_now || false,
       image: place.photos?.[0]
         ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${place.photos[0].photo_reference}&key=${apiKey}`
-        : "/placeholder.svg?height=200&width=400",
+        : `https://via.placeholder.com/400x300?text=${encodeURIComponent(
+            place.name || "No Image"
+          )}`,
       types: place.types || [],
       description: place.types ? place.types.join(", ").replace(/_/g, " ") : "",
     }));
