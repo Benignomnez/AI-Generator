@@ -62,11 +62,13 @@ export function ModelSelector() {
         <PopoverTrigger asChild>
           <Button
             variant="outline"
+            width="fit"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between overflow-hidden"
+            className="w-full justify-between overflow-hidden max-w-full"
+            style={{ maxWidth: "100%", boxSizing: "border-box" }}
           >
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 max-w-[calc(100%-20px)]">
               <span className="text-lg flex-shrink-0">
                 {selectedModel?.icon}
               </span>
@@ -74,12 +76,18 @@ export function ModelSelector() {
                 {selectedModel?.label || "Select model..."}
               </span>
             </div>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 flex-shrink-0" />
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0">
-          <Command>
-            <CommandInput placeholder="Search models..." />
+        <PopoverContent
+          className="w-[200px] p-0 max-w-[200px]"
+          style={{ width: "200px", maxWidth: "200px" }}
+        >
+          <Command className="max-w-full">
+            <CommandInput
+              placeholder="Search models..."
+              className="max-w-full"
+            />
             <CommandList>
               <CommandEmpty>No model found.</CommandEmpty>
               <CommandGroup>
@@ -88,14 +96,19 @@ export function ModelSelector() {
                     key={model.value}
                     value={model.value}
                     onSelect={handleModelSelect}
+                    className="flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{model.icon}</span>
-                      {model.label}
+                    <div className="flex items-center gap-2 min-w-0 max-w-[80%] overflow-hidden">
+                      <span className="text-lg flex-shrink-0">
+                        {model.icon}
+                      </span>
+                      <span className="truncate max-w-[120px]">
+                        {model.label}
+                      </span>
                     </div>
                     <Check
                       className={cn(
-                        "ml-auto h-4 w-4",
+                        "ml-auto h-4 w-4 flex-shrink-0",
                         value === model.value ? "opacity-100" : "opacity-0"
                       )}
                     />

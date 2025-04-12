@@ -56,11 +56,17 @@ export function Sidebar({ className, activeTab, setActiveTab }: SidebarProps) {
   return (
     <div
       className={cn(
-        "pb-12 w-[220px] max-w-full border-r bg-background/95 backdrop-blur",
+        "pb-12 w-[220px] max-w-[220px] flex-shrink-0 border-r bg-background/95 backdrop-blur overflow-hidden",
         className
       )}
+      style={{
+        minWidth: "220px",
+        width: "220px",
+        maxWidth: "220px",
+        boxSizing: "border-box",
+      }}
     >
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full overflow-hidden">
         <div className="py-6 px-5 flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold">VecinoAI</h1>
@@ -75,13 +81,15 @@ export function Sidebar({ className, activeTab, setActiveTab }: SidebarProps) {
                 key={item.id}
                 variant={activeTab === item.id ? "secondary" : "ghost"}
                 size="lg"
+                width="fit"
                 className={cn(
-                  "w-full justify-start gap-3 font-normal text-left truncate overflow-hidden",
+                  "w-full justify-start gap-3 font-normal text-left truncate overflow-hidden max-w-full",
                   activeTab === item.id && "font-medium"
                 )}
+                style={{ maxWidth: "100%", boxSizing: "border-box" }}
                 onClick={() => setActiveTab(item.id)}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3 min-w-0 max-w-[calc(100%-8px)]">
                   <div className="flex-shrink-0">{item.icon}</div>
                   <span className="truncate">{item.label}</span>
                 </div>
@@ -96,9 +104,11 @@ export function Sidebar({ className, activeTab, setActiveTab }: SidebarProps) {
           <Button
             variant="outline"
             size="lg"
-            className="w-full mt-4 gap-2 justify-start overflow-hidden"
+            width="fit"
+            className="w-full mt-4 gap-2 justify-start overflow-hidden max-w-full"
+            style={{ maxWidth: "100%", boxSizing: "border-box" }}
           >
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 max-w-[calc(100%-20px)]">
               <Settings className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Settings</span>
             </div>

@@ -1544,6 +1544,7 @@ export default function TravelGuide() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  width="fit"
                   className={`h-9 gap-2 relative transition-all duration-300 ${
                     !location
                       ? "opacity-70"
@@ -1563,7 +1564,9 @@ export default function TravelGuide() {
                       <Bot className="h-4.5 w-4.5" />
                     )}
                   </div>
-                  <span className="sm:inline font-medium">AI Suggestions</span>
+                  <span className="sm:inline font-medium whitespace-nowrap">
+                    AI Suggestions
+                  </span>
                   {location && !aiSuggestionsLoading && (
                     <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
@@ -1595,9 +1598,16 @@ export default function TravelGuide() {
 
                 <Sheet>
                   <SheetTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      width="fit"
+                      className="h-9"
+                    >
                       <Filter className="h-4 w-4 mr-2" />
-                      <span className="hidden sm:inline">Filters</span>
+                      <span className="hidden sm:inline whitespace-nowrap">
+                        Filters
+                      </span>
                     </Button>
                   </SheetTrigger>
                   <SheetContent>
@@ -1675,6 +1685,7 @@ export default function TravelGuide() {
                       </div>
 
                       <Button
+                        width="fit"
                         className="w-full"
                         onClick={() => {
                           document.body.click(); // Close the sheet
@@ -1714,8 +1725,8 @@ export default function TravelGuide() {
                         }, 100);
                       }}
                     >
-                      <Search className="h-4 w-4 text-primary" />
-                      <span>{suggestion}</span>
+                      <Search className="h-4 w-4 text-primary shrink-0" />
+                      <span className="truncate">{suggestion}</span>
                     </button>
                   ))}
                 </div>
@@ -1751,14 +1762,16 @@ export default function TravelGuide() {
                         className="flex items-center gap-2 w-full p-2 text-left hover:bg-muted rounded-md"
                         onClick={() => handleLocationSelect(suggestion)}
                       >
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <div className="flex flex-col">
-                          <span className="font-medium">
+                        <MapPin className="h-4 w-4 text-primary shrink-0" />
+                        <div className="overflow-hidden">
+                          <div className="font-medium text-sm truncate">
                             {suggestion.mainText}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            {suggestion.secondaryText}
-                          </span>
+                          </div>
+                          {suggestion.secondaryText && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              {suggestion.secondaryText}
+                            </div>
+                          )}
                         </div>
                       </button>
                     ))}
@@ -1773,14 +1786,16 @@ export default function TravelGuide() {
                         className="flex items-center gap-2 w-full p-2 text-left hover:bg-muted rounded-md"
                         onClick={() => handleLocationSelect(suggestion)}
                       >
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <div className="flex flex-col">
-                          <span className="font-medium">
+                        <MapPin className="h-4 w-4 text-primary shrink-0" />
+                        <div className="overflow-hidden">
+                          <div className="font-medium text-sm truncate">
                             {suggestion.mainText}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            {suggestion.secondaryText}
-                          </span>
+                          </div>
+                          {suggestion.secondaryText && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              {suggestion.secondaryText}
+                            </div>
+                          )}
                         </div>
                       </button>
                     ))}
@@ -1849,8 +1864,8 @@ export default function TravelGuide() {
                       }
                     }}
                   >
-                    <MapPin className="h-4 w-4" />
-                    <span>Use my current location</span>
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Use my current location</span>
                   </button>
 
                   <button
@@ -1904,8 +1919,8 @@ export default function TravelGuide() {
                       }
                     }}
                   >
-                    <Crosshair className="h-4 w-4" />
-                    <span>Enter coordinates manually</span>
+                    <Crosshair className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Enter coordinates manually</span>
                   </button>
 
                   <button
@@ -1926,8 +1941,8 @@ export default function TravelGuide() {
                       });
                     }}
                   >
-                    <Trash2 className="h-4 w-4" />
-                    <span>Clear location</span>
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Clear location</span>
                   </button>
                 </div>
               </div>
@@ -2083,7 +2098,7 @@ export default function TravelGuide() {
                 </div>
 
                 <button
-                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10 w-8 h-8 min-w-8 min-h-8"
                   onClick={() => {
                     const scrollContainer = document.querySelector(
                       "#trending-scroll-area [data-radix-scroll-area-viewport]"
@@ -2101,7 +2116,7 @@ export default function TravelGuide() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <button
-                  className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10 w-8 h-8 min-w-8 min-h-8"
                   onClick={() => {
                     const scrollContainer = document.querySelector(
                       "#trending-scroll-area [data-radix-scroll-area-viewport]"
@@ -2340,7 +2355,7 @@ export default function TravelGuide() {
                   </div>
 
                   <button
-                    className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10 w-8 h-8 min-w-8 min-h-8"
                     onClick={() => {
                       const scrollContainer = document.querySelector(
                         "#places-scroll-area [data-radix-scroll-area-viewport]"
@@ -2358,7 +2373,7 @@ export default function TravelGuide() {
                     <ChevronLeft className="h-5 w-5" />
                   </button>
                   <button
-                    className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10 w-8 h-8 min-w-8 min-h-8"
                     onClick={() => {
                       const scrollContainer = document.querySelector(
                         "#places-scroll-area [data-radix-scroll-area-viewport]"
@@ -2809,6 +2824,7 @@ export default function TravelGuide() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            width="fit"
                             className="h-8 w-8 rounded-full bg-muted/80 text-primary hover:bg-primary/20"
                             onClick={(e) => {
                               e.stopPropagation(); // Prevent event bubbling
@@ -2830,6 +2846,7 @@ export default function TravelGuide() {
                         <Button
                           variant="default"
                           size="sm"
+                          width="fit"
                           className="bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
                           onClick={(e) => {
                             e.stopPropagation(); // Prevent event bubbling
