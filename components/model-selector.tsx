@@ -64,15 +64,17 @@ export function ModelSelector() {
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between"
+            className="w-full justify-between overflow-hidden"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-lg">{selectedModel?.icon}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-lg flex-shrink-0">
+                {selectedModel?.icon}
+              </span>
               <span className="truncate">
                 {selectedModel?.label || "Select model..."}
               </span>
             </div>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 flex-shrink-0" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[200px] p-0">
