@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
             reference: photo.photo_reference,
             width: photo.width,
             height: photo.height,
-            url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${photo.photo_reference}&key=${apiKey}`,
+            url: `/api/places/photo?reference=${photo.photo_reference}&maxwidth=800`,
           }))
         : [
             {

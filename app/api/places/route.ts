@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       priceLevel: place.price_level ? "$".repeat(place.price_level) : "N/A",
       openNow: place.opening_hours?.open_now || false,
       image: place.photos?.[0]
-        ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${place.photos[0].photo_reference}&key=${apiKey}`
+        ? `/api/places/photo?reference=${place.photos[0].photo_reference}&maxwidth=400`
         : `https://via.placeholder.com/400x300?text=${encodeURIComponent(
             place.name || "No Image"
           )}`,

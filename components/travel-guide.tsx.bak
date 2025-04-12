@@ -36,6 +36,10 @@ import {
   Crosshair,
   Trash2,
   Compass,
+  Landmark,
+  LayoutGrid,
+  Plus,
+  Map,
 } from "lucide-react";
 import {
   Card,
@@ -169,6 +173,7 @@ export default function TravelGuide() {
   const [selectedLocation, setSelectedLocation] =
     useState<LocationSuggestion | null>(null);
   const locationSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchQueryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [filters, setFilters] = useState({
     priceLevel: [] as string[],
     minRating: 0,
@@ -246,56 +251,56 @@ export default function TravelGuide() {
   const popularCategories: CategoryItem[] = [
     {
       id: "restaurant",
-      name: "Restaurantes",
+      name: "Restaurants",
       icon: <Utensils className="h-10 w-10" />,
       count: categoryCounts.restaurant,
       color: "bg-red-50 text-red-500",
     },
     {
       id: "beach",
-      name: "Playas",
+      name: "Beaches",
       icon: <Umbrella className="h-10 w-10" />,
       count: categoryCounts.beach,
       color: "bg-blue-50 text-blue-500",
     },
     {
       id: "hotel",
-      name: "Hoteles",
+      name: "Hotels",
       icon: <Hotel className="h-10 w-10" />,
       count: categoryCounts.hotel,
       color: "bg-slate-50 text-slate-500",
     },
     {
       id: "bar",
-      name: "Bares",
+      name: "Bars",
       icon: <Wine className="h-10 w-10" />,
       count: categoryCounts.bar,
       color: "bg-purple-50 text-purple-500",
     },
     {
       id: "cafe",
-      name: "Cafeterías",
+      name: "Cafes",
       icon: <Coffee className="h-10 w-10" />,
       count: categoryCounts.cafe,
       color: "bg-amber-50 text-amber-500",
     },
     {
       id: "services",
-      name: "Servicios",
+      name: "Services",
       icon: <Wrench className="h-10 w-10" />,
       count: categoryCounts.services,
       color: "bg-emerald-50 text-emerald-500",
     },
     {
       id: "entertainment",
-      name: "Entretenimiento",
+      name: "Entertainment",
       icon: <Theater className="h-10 w-10" />,
       count: categoryCounts.entertainment,
       color: "bg-pink-50 text-pink-500",
     },
     {
       id: "shopping",
-      name: "Compras",
+      name: "Shopping",
       icon: <ShoppingBag className="h-10 w-10" />,
       count: categoryCounts.shopping,
       color: "bg-green-50 text-green-500",
@@ -378,6 +383,10 @@ export default function TravelGuide() {
       setPlaces(data.results);
       setTrendingPlaces(data.results);
 
+      // Option to switch to map view automatically
+      // Uncomment the next line to auto-switch to map view on category selection
+      // setViewMode("map");
+
       // Force a small delay to ensure DOM is updated before scrolling
       setTimeout(() => {
         const resultsSection = document.querySelector(
@@ -385,6 +394,15 @@ export default function TravelGuide() {
         );
         if (resultsSection) {
           resultsSection.scrollIntoView({ behavior: "smooth" });
+        }
+
+        // Show a hint about the map view if there are results
+        if (data.results.length > 0) {
+          toast({
+            title: `${data.results.length} lugares encontrados`,
+            description: "Puedes ver todos en el mapa haciendo clic en 'Map'",
+            duration: 4000,
+          });
         }
       }, 300);
     } catch (error: any) {
@@ -1212,7 +1230,6 @@ export default function TravelGuide() {
     string[]
   >([]);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-  const searchQueryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Add default search suggestions for common queries
   const defaultSearchSuggestions = [
@@ -1354,25 +1371,64 @@ export default function TravelGuide() {
     }
   };
 
+  // Function to get the appropriate icon for a place category
+  const getCategoryIcon = (type: string, className: string = "h-5 w-5") => {
+    const iconMap: { [key: string]: React.ReactNode } = {
+      restaurant: <Utensils className={className} />,
+      cafe: <Coffee className={className} />,
+      bar: <Wine className={className} />,
+      lodging: <Hotel className={className} />,
+      hotel: <Hotel className={className} />,
+      beach: <Umbrella className={className} />,
+      shopping_mall: <ShoppingBag className={className} />,
+      store: <ShoppingBag className={className} />,
+      tourist_attraction: <Landmark className={className} />,
+      park: <Umbrella className={className} />,
+      point_of_interest: <Compass className={className} />,
+      establishment: <MapPin className={className} />,
+      place_of_worship: <Landmark className={className} />,
+      museum: <Landmark className={className} />,
+      art_gallery: <Landmark className={className} />,
+      entertainment: <Theater className={className} />,
+      services: <Wrench className={className} />,
+      food: <Utensils className={className} />,
+      bakery: <Utensils className={className} />,
+      supermarket: <ShoppingBag className={className} />,
+    };
+
+    // Normalize the type by removing underscores and convert to lowercase
+    const normalizedType = type.replace(/_/g, '').toLowerCase();
+    
+    // Check for partial matches in the keys
+    for (const key in iconMap) {
+      if (normalizedType.includes(key.replace(/_/g, '').toLowerCase())) {
+        return iconMap[key];
+      }
+    }
+
+    // Return default icon if no match
+    return <MapPin className={className} />;
+  };
+
   return (
-    <Card className="border shadow-lg h-[calc(100vh-120px)]">
+    <div className="border shadow-lg h-[calc(100vh-120px)] rounded-lg bg-white dark:bg-gray-950">
       {/* Floating back to top button */}
       <FloatingControls />
-      <CardHeader className="border-b bg-muted/40 px-6">
+      <div className="border-b bg-muted/40 px-6 flex flex-col space-y-1.5 p-6">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
             <MapIcon className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-lg">Travel Guide</CardTitle>
-            <CardDescription>
+            <h3 className="text-lg font-semibold">Travel Guide</h3>
+            <p className="text-sm text-muted-foreground">
               Discover places to visit, eat, and stay
-            </CardDescription>
+            </p>
           </div>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="p-0 overflow-hidden h-[calc(100vh-220px)] flex flex-col">
+      <div className="p-0 overflow-hidden h-[calc(100vh-220px)] flex flex-col">
         {/* Search section - sticky only until scrolled past */}
         <div
           className="p-6 bg-background"
@@ -1575,20 +1631,31 @@ export default function TravelGuide() {
                 <Tabs
                   value={viewMode}
                   onValueChange={(v) => setViewMode(v as "grid" | "map")}
-                  className="hidden md:flex"
+                  className="hidden md:block"
                 >
-                  <TabsList>
-                    <TabsTrigger value="grid" className="px-3">
-                      <div className="grid grid-cols-3 gap-0.5 h-4 w-4 mr-2">
+                  <TabsList className="h-9">
+                    <TabsTrigger
+                      value="grid"
+                      className="px-3 flex gap-2 items-center"
+                    >
+                      <div className="grid grid-cols-3 gap-0.5 h-4 w-4">
                         {[...Array(9)].map((_, i) => (
                           <div key={i} className="bg-current rounded-sm" />
                         ))}
                       </div>
-                      Grid
+                      <span>Grid</span>
                     </TabsTrigger>
-                    <TabsTrigger value="map" className="px-3">
-                      <MapIcon className="h-4 w-4 mr-2" />
-                      Map
+                    <TabsTrigger
+                      value="map"
+                      className="px-3 flex gap-2 items-center"
+                    >
+                      <MapIcon className="h-4 w-4" />
+                      <span>Map</span>
+                      {coordinates && filteredPlaces.length > 0 && (
+                        <Badge className="ml-1 h-5 px-1.5 bg-primary/20 text-primary hover:bg-primary/30 border-primary/20">
+                          {filteredPlaces.length}
+                        </Badge>
+                      )}
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -1941,7 +2008,7 @@ export default function TravelGuide() {
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
               <Compass className="h-5 w-5 text-primary" />
-              Categorías Populares
+              Popular Categories
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 overflow-x-auto pb-2">
               {popularCategories.map((cat) => (
@@ -1961,7 +2028,7 @@ export default function TravelGuide() {
                     <div className="text-center">
                       <h3 className="font-medium">{cat.name}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {cat.count} lugares
+                        {cat.count} places
                       </p>
                     </div>
                   </div>
@@ -2251,160 +2318,363 @@ export default function TravelGuide() {
 
               {/* Responsive alternative for smaller screens */}
               <div className="block md:hidden mb-6">
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                  Desliza para ver más lugares
-                </h3>
-                <SwipeIndicator />
-                <ScrollArea
-                  className="whitespace-nowrap pb-4 relative"
-                  id="places-scroll-area"
-                >
-                  <div className="flex gap-4 px-1 pb-1">
-                    {filteredPlaces.map((place) => (
-                      <Card
-                        key={place.id}
-                        className="w-72 shrink-0 overflow-hidden transition-all hover:shadow-lg cursor-pointer"
-                        onClick={() => handlePlaceSelect(place)}
-                      >
-                        <div className="relative h-40">
-                          <img
-                            src={place.image || "/placeholder.svg"}
-                            alt={place.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                "/placeholder.svg";
-                            }}
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                          <div className="absolute bottom-0 left-0 p-3 text-white">
-                            <h3 className="font-semibold text-lg line-clamp-1">
-                              {place.name}
-                            </h3>
-                            <div className="flex items-center gap-1 mt-1">
-                              {renderStars(place.rating)}
-                              <span className="text-sm ml-1">
-                                {place.rating.toFixed(1)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="absolute top-2 right-2 flex flex-col gap-1">
-                            <Badge
-                              variant={place.openNow ? "default" : "secondary"}
-                              className="font-medium text-xs"
-                            >
-                              {place.openNow ? "Open" : "Closed"}
-                            </Badge>
-                          </div>
-                        </div>
-                        <CardFooter className="p-3 flex items-start gap-2 text-muted-foreground">
-                          <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
-                          <span className="text-xs line-clamp-2">
-                            {place.address}
-                          </span>
-                        </CardFooter>
-                      </Card>
-                    ))}
-                  </div>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Desliza para ver más lugares
+                  </h3>
+                  <Button
+                    variant={viewMode === "map" ? "default" : "outline"}
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() =>
+                      setViewMode(viewMode === "grid" ? "map" : "grid")
+                    }
+                  >
+                    {viewMode === "grid" ? (
+                      <>
+                        <MapIcon className="h-3.5 w-3.5" />
+                        <span className="text-xs">Ver mapa</span>
+                      </>
+                    ) : (
+                      <>
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        <span className="text-xs">Ver lista</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
 
-                  {/* Scroll indicators */}
-                  <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 py-1">
-                    {Array.from({
-                      length: Math.ceil(filteredPlaces.length / 3),
-                    }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`h-1 w-6 rounded-full transition-colors ${
-                          i === placesScrollIndex
-                            ? "bg-primary"
-                            : "bg-muted-foreground/20 hover:bg-muted-foreground/40"
-                        }`}
+                {viewMode === "grid" && (
+                  <>
+                    <SwipeIndicator />
+                    <ScrollArea
+                      className="whitespace-nowrap pb-4 relative"
+                      id="places-scroll-area"
+                    >
+                      <div className="flex gap-4 px-1 pb-1">
+                        {filteredPlaces.map((place) => (
+                          <Card
+                            key={place.id}
+                            className="w-72 shrink-0 overflow-hidden transition-all hover:shadow-lg cursor-pointer"
+                            onClick={() => handlePlaceSelect(place)}
+                          >
+                            <div className="relative h-40">
+                              <img
+                                src={place.image || "/placeholder.svg"}
+                                alt={place.name}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src =
+                                    "/placeholder.svg";
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                              <div className="absolute bottom-0 left-0 p-3 text-white">
+                                <h3 className="font-semibold text-lg line-clamp-1">
+                                  {place.name}
+                                </h3>
+                                <div className="flex items-center gap-1 mt-1">
+                                  {renderStars(place.rating)}
+                                  <span className="text-sm ml-1">
+                                    {place.rating.toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="absolute top-2 right-2 flex flex-col gap-1">
+                                <Badge
+                                  variant={
+                                    place.openNow ? "default" : "secondary"
+                                  }
+                                  className="font-medium text-xs"
+                                >
+                                  {place.openNow ? "Open" : "Closed"}
+                                </Badge>
+                              </div>
+                            </div>
+                            <CardFooter className="p-3 flex items-start gap-2 text-muted-foreground">
+                              <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                              <span className="text-xs line-clamp-2">
+                                {place.address}
+                              </span>
+                            </CardFooter>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {/* Scroll indicators */}
+                      <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 py-1">
+                        {Array.from({
+                          length: Math.ceil(filteredPlaces.length / 3),
+                        }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`h-1 w-6 rounded-full transition-colors ${
+                              i === placesScrollIndex
+                                ? "bg-primary"
+                                : "bg-muted-foreground/20 hover:bg-muted-foreground/40"
+                            }`}
+                            onClick={() => {
+                              const scrollContainer = document.querySelector(
+                                "#places-scroll-area [data-radix-scroll-area-viewport]"
+                              );
+                              if (scrollContainer) {
+                                const cardWidth = 288; // 272px card + 16px gap
+                                const scrollPosition = i * cardWidth * 3;
+                                scrollContainer.scrollTo({
+                                  left: scrollPosition,
+                                  behavior: "smooth",
+                                });
+                                setPlacesScrollIndex(i);
+                              }
+                            }}
+                            style={{ cursor: "pointer" }}
+                          />
+                        ))}
+                      </div>
+
+                      <button
+                        className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
                         onClick={() => {
                           const scrollContainer = document.querySelector(
                             "#places-scroll-area [data-radix-scroll-area-viewport]"
                           );
                           if (scrollContainer) {
                             const cardWidth = 288; // 272px card + 16px gap
-                            const scrollPosition = i * cardWidth * 3;
-                            scrollContainer.scrollTo({
-                              left: scrollPosition,
+                            scrollContainer.scrollBy({
+                              left: -cardWidth * 2,
                               behavior: "smooth",
                             });
-                            setPlacesScrollIndex(i);
                           }
                         }}
-                        style={{ cursor: "pointer" }}
+                        aria-label="Scroll left"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
+                        onClick={() => {
+                          const scrollContainer = document.querySelector(
+                            "#places-scroll-area [data-radix-scroll-area-viewport]"
+                          );
+                          if (scrollContainer) {
+                            const cardWidth = 288; // 272px card + 16px gap
+                            scrollContainer.scrollBy({
+                              left: cardWidth * 2,
+                              behavior: "smooth",
+                            });
+                          }
+                        }}
+                        aria-label="Scroll right"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </ScrollArea>
+                  </>
+                )}
+                {viewMode === "map" && (
+                  <div className="md:hidden">
+                    <div className="bg-muted/30 px-3 py-2 rounded-lg mb-2 text-sm text-center">
+                      Tap the map to see full details
+                    </div>
+                    <div className="h-[400px] rounded-lg overflow-hidden">
+                      <iframe
+                        className="w-full h-full border-0"
+                        style={{ border: 0 }}
+                        loading="lazy"
+                        allowFullScreen
+                        referrerPolicy="no-referrer-when-downgrade"
+                        src={(() => {
+                          const baseUrl = `https://www.google.com/maps/embed/v1/search?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
+                          const center = `&center=${coordinates.lat},${coordinates.lng}`;
+                          let query = "";
+                          
+                          if (searchQuery) {
+                            query = `&q=${encodeURIComponent(`${searchQuery} ${category} near ${locationInputValue || ""}`)}`;
+                          } else if (category) {
+                            query = `&q=${encodeURIComponent(`${category.replace(/_/g, " ")} in ${locationInputValue || ""}`)}`;
+                          }
+                          
+                          const zoom = filteredPlaces.length > 20 ? "&zoom=13" : filteredPlaces.length > 5 ? "&zoom=14" : "&zoom=15";
+                          
+                          return `${baseUrl}${center}${query}${zoom}`;
+                        })()}`}
                       />
-                    ))}
+                    </div>
                   </div>
-
-                  <button
-                    className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-r-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
-                    onClick={() => {
-                      const scrollContainer = document.querySelector(
-                        "#places-scroll-area [data-radix-scroll-area-viewport]"
-                      );
-                      if (scrollContainer) {
-                        const cardWidth = 288; // 272px card + 16px gap
-                        scrollContainer.scrollBy({
-                          left: -cardWidth * 2,
-                          behavior: "smooth",
-                        });
-                      }
-                    }}
-                    aria-label="Scroll left"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button
-                    className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/80 rounded-l-full p-1 shadow-md text-muted-foreground hover:text-foreground hover:bg-background flex items-center justify-center z-10"
-                    onClick={() => {
-                      const scrollContainer = document.querySelector(
-                        "#places-scroll-area [data-radix-scroll-area-viewport]"
-                      );
-                      if (scrollContainer) {
-                        const cardWidth = 288; // 272px card + 16px gap
-                        scrollContainer.scrollBy({
-                          left: cardWidth * 2,
-                          behavior: "smooth",
-                        });
-                      }
-                    }}
-                    aria-label="Scroll right"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </ScrollArea>
+                )}
               </div>
 
-              <TabsContent value="map" className="m-0 h-full">
-                <div className="relative h-[calc(100vh-320px)] bg-muted rounded-lg overflow-hidden">
-                  {coordinates ? (
+              <TabsContent 
+                value="map" 
+                className="relative w-full h-[500px] md:h-[600px] lg:h-[700px] mb-6 overflow-hidden"
+              >
+                {coordinates && filteredPlaces.length > 0 ? (
+                  <>
+                    {/* Google Maps iframe with markers for all filtered places */}
                     <iframe
-                      width="100%"
-                      height="100%"
+                      className="w-full h-full border-0"
                       style={{ border: 0 }}
                       loading="lazy"
                       allowFullScreen
                       referrerPolicy="no-referrer-when-downgrade"
-                      src={`https://www.google.com/maps/embed/v1/search?key=${
-                        process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
-                      }&q=${encodeURIComponent(category)}&center=${
-                        coordinates.lat
-                      },${coordinates.lng}&zoom=14`}
-                    ></iframe>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">
-                          Enter a location to view the map
-                        </p>
+                      src={(() => {
+                        // Create a proper Google Maps URL with markers for all places
+                        const baseUrl = `https://www.google.com/maps/embed/v1/search?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
+                        
+                        // Add center parameter using coordinates
+                        const center = `&center=${coordinates.lat},${coordinates.lng}`;
+                        
+                        // Create a dynamic query based on the selected category and search query
+                        let query = "";
+                        
+                        if (searchQuery) {
+                          // If we have a search query, use it along with the category
+                          query = `&q=${encodeURIComponent(`${searchQuery} ${category} near ${locationInputValue || ""}`)}`;
+                        } else if (category) {
+                          // If we only have a category, search for places of that type
+                          query = `&q=${encodeURIComponent(`${category.replace(/_/g, " ")} in ${locationInputValue || ""}`)}`;
+                        }
+                        
+                        // Add zoom level - adjust based on number of results
+                        const zoom = filteredPlaces.length > 20 ? "&zoom=13" : filteredPlaces.length > 5 ? "&zoom=14" : "&zoom=15";
+                        
+                        return `${baseUrl}${center}${query}${zoom}`;
+                      })()}`}
+                    />
+
+                    {/* Desktop overlay with list of places (hidden on mobile) */}
+                    <div className="absolute top-4 right-4 w-80 max-h-[calc(100%-32px)] bg-white dark:bg-slate-950 rounded-lg shadow-lg overflow-hidden hidden md:block">
+                      <div className="p-4 bg-slate-100 dark:bg-slate-900 border-b dark:border-slate-700">
+                        <h3 className="font-semibold flex items-center justify-between">
+                          <span>{filteredPlaces.length} places found</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => setViewMode("grid")}
+                            title="Switch to grid view"
+                          >
+                            <LayoutGrid className="h-4 w-4" />
+                          </Button>
+                        </h3>
                       </div>
+                      
+                      <ScrollArea className="max-h-[calc(100vh-250px)] overflow-y-auto">
+                        <div className="p-1">
+                          {filteredPlaces.map((place) => (
+                            <div 
+                              key={place.id} 
+                              className="p-3 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-md mb-1 cursor-pointer transition-colors"
+                              onClick={() => handlePlaceSelect(place)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex-shrink-0 p-2 bg-slate-200 dark:bg-slate-800 rounded-full">
+                                  {getCategoryIcon(place.types?.[0] || category, "h-5 w-5")}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-medium text-sm truncate">{place.name}</h4>
+                                  <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">
+                                    <div className="flex items-center mr-2">
+                                      <Star className="h-3 w-3 text-yellow-500 mr-1" />
+                                      <span>{place.rating || "N/A"}</span>
+                                    </div>
+                                    {place.priceLevel && place.priceLevel !== "N/A" && (
+                                      <div className="mr-2">
+                                        {place.priceLevel}
+                                      </div>
+                                    )}
+                                    <span className={
+                                      place.openNow 
+                                        ? "text-green-500 dark:text-green-400" 
+                                        : "text-red-500 dark:text-red-400"
+                                    }>
+                                      {place.openNow ? "Open" : "Closed"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     </div>
-                  )}
-                </div>
+
+                    {/* Mobile overlay as bottom sheet (visible only on mobile) */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 rounded-t-xl shadow-lg overflow-hidden block md:hidden">
+                      <div className="p-3 bg-slate-100 dark:bg-slate-900 border-b dark:border-slate-700">
+                        <h3 className="font-semibold flex items-center justify-between">
+                          <span>{filteredPlaces.length} places found</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => setViewMode("grid")}
+                            title="Switch to grid view"
+                          >
+                            <LayoutGrid className="h-4 w-4" />
+                          </Button>
+                        </h3>
+                      </div>
+                      
+                      <ScrollArea className="overflow-x-auto pb-3 pt-2">
+                        <div className="flex px-2">
+                          {filteredPlaces.slice(0, 5).map((place) => (
+                            <div 
+                              key={place.id} 
+                              className="flex-shrink-0 w-[180px] p-3 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md mx-1 cursor-pointer transition-colors"
+                              onClick={() => handlePlaceSelect(place)}
+                            >
+                              <div className="flex flex-col gap-2">
+                                <div className="flex-shrink-0 p-2 bg-slate-200 dark:bg-slate-800 rounded-full w-fit">
+                                  {getCategoryIcon(place.types?.[0] || category, "h-5 w-5")}
+                                </div>
+                                <div>
+                                  <h4 className="font-medium text-sm truncate">{place.name}</h4>
+                                  <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">
+                                    <div className="flex items-center mr-2">
+                                      <Star className="h-3 w-3 text-yellow-500 mr-1" />
+                                      <span>{place.rating || "N/A"}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {filteredPlaces.length > 5 && (
+                            <div 
+                              className="flex-shrink-0 w-[120px] p-3 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md mx-1 cursor-pointer transition-colors flex items-center justify-center"
+                              onClick={() => setViewMode("grid")}
+                            >
+                              <div className="text-center">
+                                <Plus className="h-5 w-5 mx-auto mb-1" />
+                                <span className="text-sm font-medium">Ver {filteredPlaces.length - 5} más</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 rounded-lg">
+                    <Map className="h-12 w-12 text-slate-400 mb-4" />
+                    {!coordinates ? (
+                      <p className="text-center text-slate-600 dark:text-slate-400">
+                        Select a location to view places on the map
+                      </p>
+                    ) : filteredPlaces.length === 0 ? (
+                      <p className="text-center text-slate-600 dark:text-slate-400">
+                        No places found for this category or search query
+                      </p>
+                    ) : (
+                      <p className="text-center text-slate-600 dark:text-slate-400">
+                        Loading map...
+                      </p>
+                    )}
+                  </div>
+                )}
               </TabsContent>
             </div>
           )}
@@ -2855,7 +3125,7 @@ export default function TravelGuide() {
             </DialogContent>
           </Dialog>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

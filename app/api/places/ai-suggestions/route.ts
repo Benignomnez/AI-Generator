@@ -7,14 +7,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { query, location, interests } = body;
 
-    // Get API key from environment variable
-    const apiKey = process.env.OPENAI_API_KEY || "";
+    // Get API key from environment variables - prioritize Google API key for travel suggestions
+    const googleKey = process.env.GOOGLE_API_KEY || "";
+    const openAIKey = process.env.OPENAI_API_KEY || "";
 
-    // Validate API key
-    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-      console.error("OpenAI API key is missing from environment variables");
+    // Always use Gemini API for travel suggestions to preserve OpenAI credits for chat functionality
+    const useGemini = true;
+
+    // Validate that Google API key is available
+    if (!googleKey || !googleKey.trim()) {
+      console.error("Google API key not available for travel suggestions");
       return NextResponse.json(
-        { error: "OpenAI API key is not configured on the server" },
+        { error: "Google API key is not configured on the server" },
         { status: 500 }
       );
     }
@@ -40,53 +44,102 @@ export async function POST(req: NextRequest) {
     prompt +=
       "Please suggest 5 specific places I should visit, giving a brief reason for each. Return the response in a JSON format with a top-level 'suggestions' array containing objects with 'name', 'type', and 'reason' fields.";
 
-    // Call OpenAI API
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a travel recommendation system that provides suggestions in valid JSON format. Always return a well-formed JSON array with the suggestions.",
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 500,
-          response_format: { type: "json_object" },
-        }),
-      }
+    let aiResponse;
+
+    // Use Google Gemini API for travel suggestions
+    console.log("Using Google Gemini API for travel suggestions");
+
+    // Get model from headers or use a reliable default
+    const modelName = req.headers.get("Model") || "gemini-1.5-flash";
+    console.log("Requested model:", modelName);
+
+    // Use Gemini API key - prioritize dedicated Gemini key
+    const geminiApiKey = process.env.GEMINI_API_KEY || googleKey;
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`;
+    console.log(
+      "API URL (without key):",
+      apiUrl.replace(geminiApiKey, "[REDACTED]")
     );
 
-    if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.json();
-      console.error("OpenAI API error:", errorData);
+    const geminiResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text:
+                  "You are a travel recommendation system. " +
+                  prompt +
+                  " Ensure your response is properly formatted JSON.",
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+          topP: 0.95,
+          topK: 64,
+        },
+      }),
+    });
+
+    if (!geminiResponse.ok) {
+      const errorData = await geminiResponse.json();
+      console.error("Google Gemini API error:", errorData);
       return NextResponse.json(
         {
-          error: errorData.error?.message || "Error from OpenAI API",
+          error: errorData.error?.message || "Error from Google Gemini API",
           details: errorData,
         },
-        { status: openaiResponse.status }
+        { status: geminiResponse.status }
       );
     }
 
-    const data = await openaiResponse.json();
-    const aiSuggestions = data.choices[0].message.content.trim();
+    const geminiData = await geminiResponse.json();
+
+    // Extract text from Gemini response
+    const responseText = geminiData.candidates[0].content.parts[0].text;
+
+    // Parse JSON from the text - find JSON parts
+    let jsonStart = responseText.indexOf("{");
+    let jsonEnd = responseText.lastIndexOf("}") + 1;
+
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      const jsonText = responseText.substring(jsonStart, jsonEnd);
+      aiResponse = jsonText;
+    } else {
+      // If we can't find JSON object markers, look for array markers
+      jsonStart = responseText.indexOf("[");
+      jsonEnd = responseText.lastIndexOf("]") + 1;
+
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        const jsonText = responseText.substring(jsonStart, jsonEnd);
+        // Wrap in an object with suggestions key
+        aiResponse = `{"suggestions": ${jsonText}}`;
+      } else {
+        console.error(
+          "Could not extract JSON from Gemini response:",
+          responseText
+        );
+        return NextResponse.json(
+          {
+            error: "Could not extract valid JSON from AI response",
+            raw: responseText,
+          },
+          { status: 500 }
+        );
+      }
+    }
 
     // Parse the JSON response
     try {
-      const parsedContent = JSON.parse(aiSuggestions);
+      const parsedContent = JSON.parse(aiResponse);
       // Check if the response has the expected structure
       if (Array.isArray(parsedContent.suggestions)) {
         return NextResponse.json({
@@ -127,7 +180,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error: "Could not parse AI suggestions",
-          raw: aiSuggestions,
+          raw: aiResponse,
         },
         { status: 500 }
       );

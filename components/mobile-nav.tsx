@@ -1,25 +1,30 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Sidebar } from "@/components/sidebar"
-import { Menu, Sparkles } from "lucide-react"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sidebar } from "@/components/sidebar";
+import { Menu, Sparkles } from "lucide-react";
 
 interface MobileNavProps {
-  activeTab: string
-  setActiveTab: (tab: string) => void
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
 }
 
 export function MobileNav({ activeTab, setActiveTab }: MobileNavProps) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value)
+    setActiveTab(value);
     // Close the sheet when a tab is selected
-    setOpen(false)
-  }
+    setOpen(false);
+  };
 
   return (
     <div className="lg:hidden flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur sticky top-0 z-10">
@@ -35,11 +40,16 @@ export function MobileNav({ activeTab, setActiveTab }: MobileNavProps) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-[280px]">
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} />
         </SheetContent>
       </Sheet>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden sm:block">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="hidden sm:block"
+      >
         <TabsList>
           <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="image">Image</TabsTrigger>
@@ -49,6 +59,5 @@ export function MobileNav({ activeTab, setActiveTab }: MobileNavProps) {
         </TabsList>
       </Tabs>
     </div>
-  )
+  );
 }
-

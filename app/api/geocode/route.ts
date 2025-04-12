@@ -4,7 +4,10 @@ export async function GET(request: NextRequest) {
   // Get query parameters
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get("address");
+  const timestamp = searchParams.get("timestamp"); // Used to bust cache
   const apiKey = process.env.GOOGLE_PLACES_API_KEY; // We can use the same key for geocoding
+
+  console.log("Geocode API called for:", address, "at timestamp:", timestamp);
 
   if (!apiKey) {
     return NextResponse.json(
@@ -21,17 +24,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Add cache-busting timestamp and language parameter for better results
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
       address
-    )}&key=${apiKey}`;
+    )}&language=en&key=${apiKey}&v=${timestamp || Date.now()}`;
 
-    const response = await fetch(url);
+    console.log("Calling Google Geocoding API with:", address);
+
+    // Use no-store to prevent caching issues
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+      },
+    });
 
     if (!response.ok) {
       throw new Error(`Google Geocoding API returned ${response.status}`);
     }
 
     const data = await response.json();
+    console.log("Google Geocoding API status:", data.status);
 
     // Handle ZERO_RESULTS as a normal response, not an error
     if (data.status === "ZERO_RESULTS") {
@@ -59,6 +72,12 @@ export async function GET(request: NextRequest) {
     const result = data.results[0];
     const location = result.geometry.location;
     const formattedAddress = result.formatted_address;
+
+    console.log("Geocode result:", {
+      formattedAddress,
+      lat: location.lat,
+      lng: location.lng,
+    });
 
     return NextResponse.json({
       location: {
